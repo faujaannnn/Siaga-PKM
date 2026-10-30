@@ -1,0 +1,734 @@
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
+
+.map-shell-leaflet .leaflet-container {
+  z-index: 0;
+  font: inherit;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  cursor: crosshair;
+  /* iOS Safari: ensure map is clickable */
+  touch-action: manipulation;
+}
+
+.map-shell-leaflet {
+  isolation: isolate;
+  position: relative;
+}
+
+.leaflet-pane {
+  z-index: 1;
+}
+
+.leaflet-control-container {
+  z-index: 2;
+}
+
+.leaflet-interactive {
+  cursor: pointer;
+}
+
+.leaflet-tile-container img {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 3;
+}
+
+/* iOS Safari: fix untuk dialog backdrop */
+@supports (backdrop-filter: blur(20px)) {
+  .nav-mobile-dialog::backdrop {
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+}
+
+/* dark: hanya jika .dark di html - tidak ikut mode malam perangkat */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* UI Pro Max: Figtree (heading) + Noto Sans (body) - healthcare / accessible */
+  --font-sans: 'Noto Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: 'Figtree', 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-cosmic-950: #07060f;
+  --color-cosmic-900: #0c0a18;
+  --color-cosmic-800: #121028;
+  --color-cosmic-700: #1a1735;
+  --color-merah: #c41e3a;
+  --color-merah-bright: #e11d48;
+  --color-putih-soft: #f8fafc;
+  /* Healthcare accent (UI Pro Max design system) */
+  --color-health-50: #ecfeff;
+  --color-health-100: #cffafe;
+  --color-health-500: #06b6d4;
+  --color-health-600: #0891b2;
+  --color-health-700: #0e7490;
+  --color-cta-500: #10b981;
+  --color-cta-600: #059669;
+  --color-cta-700: #047857;
+}
+
+/* --- Default = siang (mode malam dinonaktifkan) --- */
+:root,
+[data-theme='day'] {
+  color-scheme: light;
+  --page-fg: #0f172a;
+  --page-fg-muted: #475569;
+  --page-fg-soft: rgba(15, 23, 42, 0.45);
+  --panel-bg: rgba(255, 255, 255, 0.88);
+  --panel-border: rgba(6, 182, 212, 0.16);
+  --panel-blur: 10px;
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --header-border: rgba(6, 182, 212, 0.14);
+  --footer-fg: #64748b;
+  --accent-glow: rgba(8, 145, 178, 0.12);
+  --link-accent: #0891b2;
+  --mp-stripe-merah: #c41e3a;
+  --mp-stripe-putih: #fff8f7;
+  --mp-hero-scrim: rgba(255, 254, 252, 0.88);
+}
+
+body {
+  background:
+    radial-gradient(ellipse 90% 55% at 85% 0%, rgba(196, 30, 58, 0.06), transparent 52%),
+    radial-gradient(ellipse 70% 45% at 12% 100%, rgba(6, 182, 212, 0.08), transparent 48%),
+    radial-gradient(ellipse 55% 35% at 5% 15%, rgba(245, 158, 11, 0.07), transparent 50%),
+    linear-gradient(180deg, #ecfeff 0%, #f0fdfa 42%, #f8fafc 100%);
+  color: var(--page-fg);
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply m-0 min-h-svh font-sans text-base antialiased;
+    transition:
+      background 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      color 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Bendera - hanya transform & opacity (kompositor) */
+@keyframes flag-wave-y {
+  0%,
+  100% {
+    transform: perspective(140px) rotateY(-5deg) translateZ(0);
+  }
+  50% {
+    transform: perspective(140px) rotateY(5deg) translateZ(0);
+  }
+}
+
+.flag-wave-root {
+  transform-origin: left center;
+  will-change: transform;
+  animation: flag-wave-y 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flag-wave-root {
+    animation: none;
+  }
+}
+
+/* Spinner memuat - CSS murni, tanpa animasi Framer tiap frame */
+@keyframes spin-loader {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loader-ring {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(196, 30, 58, 0.2);
+  border-top-color: var(--color-merah-bright, #e11d48);
+  animation: spin-loader 0.75s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-ring {
+    animation: none;
+    border-top-color: rgba(196, 30, 58, 0.5);
+  }
+}
+
+/* Toggle tema */
+[data-theme='day'] .theme-toggle {
+  border-color: rgba(196, 30, 58, 0.2);
+  background: rgba(255, 255, 255, 0.55);
+  color: #422006;
+}
+
+[data-theme='day'] .theme-toggle-pill {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.55), rgba(245, 158, 11, 0.4));
+  box-shadow: 0 1px 8px rgba(196, 30, 58, 0.12);
+}
+
+[data-theme='night'] .theme-toggle {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.32);
+  color: #e2e8f0;
+}
+
+[data-theme='night'] .theme-toggle-pill {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.45), rgba(8, 145, 178, 0.32));
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.12);
+}
+
+@layer utilities {
+  .glass-panel {
+    border-radius: 1rem;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--panel-border);
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--panel-blur));
+    -webkit-backdrop-filter: blur(var(--panel-blur));
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 12px 40px rgba(0, 0, 0, 0.12);
+  }
+
+  [data-theme='night'] .glass-panel {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 16px 48px rgba(0, 0, 0, 0.35);
+  }
+
+  .glass-header {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-color: var(--header-border);
+    background: var(--header-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* Nav mengambang: border penuh + sudut lembut */
+  .glass-nav {
+    border-radius: 1rem;
+    border: 1px solid var(--header-border);
+    background: var(--header-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  [data-theme='night'] .glass-nav {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .text-theme {
+    color: var(--page-fg);
+  }
+
+  .text-theme-muted {
+    color: var(--page-fg-muted);
+  }
+
+  .text-theme-soft {
+    color: var(--page-fg-soft);
+  }
+
+  .focus-ring {
+    @apply outline-none transition-shadow duration-200;
+    @apply focus-visible:ring-[3px] focus-visible:ring-cyan-500/55 focus-visible:ring-offset-2;
+  }
+
+  [data-theme='night'] .focus-ring {
+    --tw-ring-offset-color: #05050a;
+    @apply focus-visible:ring-cyan-400/50;
+  }
+
+  [data-theme='day'] .focus-ring {
+    --tw-ring-offset-color: #ecfeff;
+  }
+
+  /* Hover kartu: bayangan + border (tanpa translate agar layout stabil - UI Pro Max) */
+  .card-lift {
+    transition:
+      box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.22s ease,
+      background-color 0.22s ease;
+    cursor: pointer;
+  }
+
+  [data-theme='day'] .card-lift:hover {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 4px 6px rgba(0, 0, 0, 0.04),
+      0 16px 48px rgba(8, 145, 178, 0.13);
+    border-color: rgba(6, 182, 212, 0.4);
+    background-color: rgba(255, 255, 255, 0.96);
+  }
+
+  [data-theme='night'] .card-lift:hover {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 16px 48px rgba(0, 0, 0, 0.45);
+    border-color: rgba(34, 211, 238, 0.28);
+  }
+
+  /* Kartu dengan aksen merah */
+  [data-theme='day'] .card-lift-red:hover {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 16px 48px rgba(196, 30, 58, 0.1);
+    border-color: rgba(196, 30, 58, 0.3);
+  }
+
+  /* Skeleton shimmer (loading placeholder) */
+  .skeleton {
+    background: linear-gradient(90deg, rgba(6, 182, 212, 0.06) 0%, rgba(6, 182, 212, 0.12) 50%, rgba(6, 182, 212, 0.06) 100%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+    border-radius: 0.5rem;
+  }
+
+  [data-theme='night'] .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%);
+    background-size: 200% 100%;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; opacity: 0.5; }
+  }
+
+  /* Tombol utama (merah) */
+  .btn-primary {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(to right, #c41e3a, #e11d48);
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: white;
+    box-shadow: 0 4px 12px rgba(196, 30, 58, 0.2);
+    transition: all 200ms;
+    outline: none;
+    text-decoration: none;
+  }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:focus-visible { box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.55); }
+
+  /* Tombol sekunder (health/cyan) */
+  .btn-secondary {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    background: #ecfeff;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0e7490;
+    transition: all 200ms;
+    outline: none;
+    text-decoration: none;
+  }
+  .btn-secondary:hover { background: #cffafe; }
+  .btn-secondary:active { transform: scale(0.98); }
+  .btn-secondary:focus-visible { box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.55); }
+
+  /* Tombol ghost */
+  .btn-ghost {
+    display: inline-flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--page-fg);
+    transition: all 200ms;
+    outline: none;
+    text-decoration: none;
+  }
+  .btn-ghost:hover {
+    border-color: rgba(6, 182, 212, 0.3);
+    background: white;
+  }
+  .btn-ghost:active { transform: scale(0.98); }
+  .btn-ghost:focus-visible { box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.55); }
+
+  /* Chip / badge kecil */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    border: 1px solid var(--panel-border);
+    background: rgba(255, 255, 255, 0.86);
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--page-fg);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  [data-theme='night'] .chip {
+    background: rgba(18, 16, 40, 0.6);
+  }
+
+  /* Error inline */
+  .inline-error {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(196, 30, 58, 0.25);
+    background: rgba(196, 30, 58, 0.06);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: #c41e3a;
+  }
+
+  /* Success inline */
+  .inline-success {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(5, 150, 105, 0.3);
+    background: rgba(16, 185, 129, 0.07);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: #047857;
+  }
+
+  /* Warning inline */
+  .inline-warn {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.07);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: #92400e;
+  }
+
+  /* Progress bar warna utama */
+  .progress-bar-track {
+    height: 0.5rem;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: rgba(6, 182, 212, 0.12);
+  }
+
+  [data-theme='night'] .progress-bar-track {
+    background: rgba(255,255,255,0.08);
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #0891b2, #06b6d4);
+  }
+
+  /* Scroll-to-top FAB */
+  .fab-scroll-top {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.25rem;
+    z-index: 40;
+    display: flex;
+    height: 2.75rem;
+    width: 2.75rem;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: linear-gradient(to bottom right, #c41e3a, #e11d48);
+    color: white;
+    box-shadow: 0 8px 24px rgba(196, 30, 58, 0.3);
+    transition: all 300ms;
+    outline: none;
+    border: none;
+    opacity: 0;
+    transform: translateY(16px);
+    pointer-events: none;
+  }
+  .fab-scroll-top:focus-visible { box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.55); }
+  .fab-scroll-top:hover { filter: brightness(1.08); }
+
+  .fab-scroll-top.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .skip-to-content {
+    @apply pointer-events-none fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg bg-cta-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition outline-none duration-200;
+    @apply focus:pointer-events-auto focus:translate-y-0 focus-visible:ring-[3px] focus-visible:ring-cyan-300/80 focus-visible:ring-offset-2;
+  }
+
+  [data-theme='day'] .skip-to-content {
+    @apply focus-visible:ring-offset-[#ecfeff];
+  }
+
+  [data-theme='night'] .skip-to-content {
+    @apply focus-visible:ring-cyan-400/70;
+    --tw-ring-offset-color: #05050a;
+  }
+
+  /* Navigasi mobile: dialog asli, tanpa dependensi (UI Pro Max: fokus, tutup jelas) */
+  .nav-mobile-dialog {
+    box-sizing: border-box;
+    width: calc(100vw - 1.5rem);
+    max-width: 24rem;
+    max-height: 100dvh;
+    margin: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    /* iOS Safari: pastikan dialog terlihat */
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+
+  .nav-mobile-dialog-panel {
+    /* Panel utama harus solid agar terlihat */
+    background: var(--header-bg, rgba(255, 255, 255, 0.95));
+  }
+
+  [data-theme='night'] .nav-mobile-dialog-panel {
+    background: rgba(18, 16, 40, 0.98);
+  }
+
+  .nav-mobile-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(6px);
+  }
+
+  [data-theme='night'] .nav-mobile-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-mobile-dialog::backdrop {
+      backdrop-filter: none;
+    }
+  }
+
+  .nav-mobile-dialog:not([open]) {
+    display: none;
+  }
+
+  /* Konten publik: irama vertikal + scroll anchor untuk sticky band */
+  .public-page-rail {
+    @apply min-w-0;
+  }
+
+  /* Latar merah-putih animasi (beranda) */
+  .mp-ribbon {
+    background: repeating-linear-gradient(
+      118deg,
+      var(--mp-stripe-merah) 0 36px,
+      var(--mp-stripe-putih) 36px 72px
+    );
+    background-size: 72px 72px;
+    will-change: background-position;
+    animation: mp-ribbon-drift 40s linear infinite;
+  }
+
+  .mp-ribbon-b {
+    background: repeating-linear-gradient(
+      64deg,
+      var(--mp-stripe-putih) 0 24px,
+      var(--mp-stripe-merah) 24px 48px
+    );
+    background-size: 48px 48px;
+    will-change: background-position;
+    animation: mp-ribbon-drift-alt 55s linear infinite reverse;
+  }
+
+  @keyframes mp-ribbon-drift {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 240px 120px;
+    }
+  }
+
+  @keyframes mp-ribbon-drift-alt {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: -200px 80px;
+    }
+  }
+
+  .mp-glow-blob {
+    animation: mp-breathe 9s ease-in-out infinite;
+  }
+
+  .mp-glow-blob-delay {
+    animation: mp-breathe 11s ease-in-out infinite 1.2s;
+  }
+
+  @keyframes mp-breathe {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.45;
+    }
+    50% {
+      transform: scale(1.12);
+      opacity: 0.7;
+    }
+  }
+
+  .mp-wave {
+    animation: mp-wave-sway 12s ease-in-out infinite;
+  }
+
+  @keyframes mp-wave-sway {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(2px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mp-ribbon,
+    .mp-ribbon-b,
+    .mp-glow-blob,
+    .mp-glow-blob-delay,
+    .mp-wave,
+    .mp-loader-ring {
+      animation: none !important;
+    }
+  }
+
+  .mp-loader-wrap {
+    @apply relative flex h-20 w-20 items-center justify-center;
+  }
+
+  .mp-loader-ring {
+    border-radius: 9999px;
+    background: conic-gradient(from 180deg, #c41e3a, #fff7f7, #c41e3a, #e11d48, #c41e3a);
+    animation: mp-loader-spin 1.1s linear infinite;
+    @apply p-[3px];
+  }
+
+  [data-theme='night'] .mp-loader-ring {
+    background: conic-gradient(
+      from 200deg,
+      #c41e3a,
+      #fecaca,
+      #f8fafc,
+      #c41e3a,
+      #e11d48,
+      #c41e3a
+    );
+  }
+
+  .mp-loader-inner {
+    @apply flex h-full w-full min-h-0 items-center justify-center rounded-full bg-white dark:bg-cosmic-900;
+  }
+
+  /* Hero beranda: stacking context untuk overlay + art */
+  .home-hero-shell {
+    isolation: isolate;
+  }
+
+  /* Tema bencana alam: grid topografis lembut + sapuan cahaya (tanpa data palsu) */
+  .siaga-puskesmas-hero-mesh {
+    background-image:
+      linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, #000 12%, transparent 70%);
+  }
+
+  [data-theme='night'] .siaga-puskesmas-hero-mesh {
+    background-image:
+      linear-gradient(rgba(241, 245, 249, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(241, 245, 249, 0.05) 1px, transparent 1px);
+    mask-image: radial-gradient(ellipse 85% 75% at 50% 28%, #000 18%, transparent 75%);
+  }
+
+  .siaga-puskesmas-hero-sweep {
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      rgba(6, 182, 212, 0.06) 35%,
+      rgba(245, 158, 11, 0.05) 50%,
+      rgba(6, 182, 212, 0.05) 65%,
+      transparent 100%
+    );
+    animation: siaga-puskesmas-sheen 14s ease-in-out infinite;
+  }
+
+  [data-theme='night'] .siaga-puskesmas-hero-sweep {
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      rgba(34, 211, 238, 0.04) 38%,
+      rgba(251, 191, 36, 0.04) 52%,
+      rgba(34, 211, 238, 0.03) 66%,
+      transparent 100%
+    );
+  }
+
+  @keyframes siaga-puskesmas-sheen {
+    0%,
+    100% {
+      transform: translateX(-4%) skewX(-2deg);
+      opacity: 0.85;
+    }
+    50% {
+      transform: translateX(4%) skewX(1deg);
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .siaga-puskesmas-hero-sweep {
+      animation: none;
+    }
+  }
+
+  @keyframes mp-loader-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}

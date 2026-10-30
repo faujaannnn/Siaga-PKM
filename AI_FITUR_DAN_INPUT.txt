@@ -1,0 +1,17 @@
+# Fitur AI (DeepSeek) di aplikasi Siaga Bencana Puskesmas
+
+- Asisten WhatsApp (petugas, jika Fonnte + LLM aktif): korpus memuat blok **`siaga_common.assessment_prompts.SIAGA_ASESMEN_VIDEO_ML_KORPUS`** (teks tunggal untuk Siaga Bencana & Puskesmas) selain naskah video & edukasi.
+
+- Kategori video ML: `asesmen_ai` (asem pengetahuan standar) atau `belajar_plus` (pengalaman tampilan “Belajar ++” di daftar/penayangan).
+- Asesmen video ML: setiap panggilan API hanya 1 (satu) pertanyaan; panggilan berikutnya disesuaikan dengan jawaban sebelumnya, hingga 4 langkah, laporan di akhir. Naskah ke DeepSeek dipotong ringkas; jika AI gagal/timeout, backend memakai pertanyaan cadangan agar alur tetap jalan. Pesan error (401, 429, 504) dari backend lebih informatif.
+- **Waktu & format soal:** keempat soal pilihan ganda seragam; prompt melarang waktu/m:ss/rentang detik di teks soal (tidak ada cuplikan embed per soal, tidak ada pola «0:50–1:18» + evaluasi analisis). Laporan: tanpa wajib timestamp. Naskah admin opsional: penanda waktu hanya bantu penyusunan naskah, bukan soal.
+- Alur **Bloom (target per soal)**: (1) *Belajar++* (`belajar_plus`): 4 soal PG ≈ 40% C1–2, 40% C3–4, 20% C3–4 lanjutan. (2) *Asesmen standar* (`asesmen_ai`): soal 1–2 fokus C1–2, soal 3 wajib C3 (aplikasi), soal 4 = C3–4 bila jawaban q3 benar (gerbang PG) atau remedial C1–C3 bila tidak. Metadata `bloom_target` disimpan per baris soal.
+- **Penilaian (c, b) & LIPI-lite:** setelah 4 jawaban, satu panggilan DeepSeek meminta laporan + untuk tiap soal: `p_correct` (0–1), `bloom_level` / opsional `bloom_distribution`, alasan, umpan balik edukatif, ringkasan jawaban rujukan. Backend menghitung c (utama = `p_correct`), norm = c×b/6, Indeks KA, IKS, rata-rata Bloom, pita keyakinan (tinggi jika p≥0,80, sebagian 0,60–0,79, rendah <0,60), dan margin ≈95% antar soal. Ini **proxy** (LLM), bukan klasifier terlatih/embedding; kalibrasi (dataset 200+ jawaban per bencana, kappa/ICC) belum diotomatisasikan. **Bukan** similarity kosinus terhadap bank jawaban, kecuali nanti dihubungkan layanan embedding.
+- **Yang belum di backend:** tindak-lanjut adaptif *setelah setiap* jawaban (remedial / klarifikasi bila p<0,60, naik level Bloom bila p≥0,80) — hari ini alur kuis masih 4 soal bantu tanpa skor sela; embedding & inter-rater uji hanya rekomendasi proses. Parameter RD/SP/MS LIPI: “Belum dinilai”; IKS_total hanya dari yang dinilai (KA saat ini), tanpa nol membebani.
+- Yang TIDAK dilakukan AI di sini: menyusun naskah video, mengunggah file video ke YouTube, atau mengganti editor manusia. Naskah/penjelasan disiapkan admin (bisa dengan alat bantu lain) lalu ditempel di admin.
+
+# Input / konfigurasi
+
+- Backend: variabel lingkungan DEEPSEEK_API_KEY, opsional DEEPSEEK_BASE_URL, DEEPSEEK_MODEL.
+- FAUZAN_ADMIN_PASSWORD: jika diset, seed memastikan user admin "fauzan" ada. JANGAN menaruh kunci/rahasia di repositori.
+- USER_MGMT_ADMIN_USERNAMES: koma, username yang boleh mengelola akun petugas (default hanya default admin dari DEFAULT_ADMIN_USERNAME).

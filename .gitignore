@@ -1,0 +1,39 @@
+# Dependensi
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build output
+dist/
+build/
+.vite/
+
+# Environment & secrets (JANGAN pernah push)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!*.pub
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Upload runtime (berisi data/foto pasien)
+backend/uploads/
+
+# Cache
+.ruff_cache/
+.pytest_cache/
+.DS_Store
+*.swp
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/extensions.json

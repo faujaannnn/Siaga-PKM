@@ -1,0 +1,14 @@
+logs
+*.log
+npm-debug.log*
+node_modules
+dist
+dist-ssr
+*.local
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Disalin dari pdfjs-dist saat predev/prebuild — besar; jangan commit
+public/pdfjs/pdf.worker.js

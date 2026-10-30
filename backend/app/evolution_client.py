@@ -1,0 +1,81 @@
+"""Kirim teks lewat Evolution API v2 (POST /message/sendText/{instance})."""
+
+from __future__ import annotations
+
+from typing import Any
+from urllib.parse import quote
+
+import httpx
+
+from app.config import settings
+from app.fonnte_client import canonical_wa_phone
+
+
+def evolution_send_number(target: str) -> str:
+    """
+    Nomor kirim Evolution: HARUS digits 62… (bukan @lid).
+    Evolution /message/sendText hanya terima digits di field 'number'.
+    """
+    t = (target or "").strip()
+    if not t:
+        return ""
+    # Extract digits dari JID apapun (@lid, @s.whatsapp.net, atau plain number)
+    if "@" in t:
+        local = t.split("@", 1)[0].replace("+", "").replace(" ", "")
+        # Jika pure digits, normalize ke 62...
+        if local.isdigit():
+            return canonical_wa_phone(local)
+        # Jika bukan digits (e.g. LID punya huruf), return empty - invalid
+        return ""
+    # Plain number tanpa @
+    return canonical_wa_phone(t)
+
+
+async def evolution_send_text(target: str, message: str) -> tuple[bool, str]:
+    key = (settings.evolution_api_key or "").strip()
+    inst = (settings.evolution_instance or "").strip()
+    base = (settings.evolution_api_base or "").strip().rstrip("/")
+    if not key:
+        return False, "EVOLUTION_API_KEY kosong"
+    if not inst:
+        return False, "EVOLUTION_INSTANCE kosong"
+    if not base:
+        return False, "EVOLUTION_API_BASE kosong"
+
+    num = evolution_send_number(target)
+    if not num:
+        return False, "nomor tujuan kosong"
+
+    url = f"{base}/message/sendText/{quote(inst, safe='')}"
+    payload: dict[str, Any] = {"number": num, "text": message}
+
+    try:
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            r = await client.post(
+                url,
+                headers={
+                    "Content-Type": "application/json",
+                    "apikey": key,
+                },
+                json=payload,
+            )
+    except httpx.RequestError as e:
+        return False, f"koneksi: {e!s}"
+
+    body = (r.text or "")[:600]
+    if r.status_code >= 400:
+        return False, f"HTTP {r.status_code}: {body}"
+
+    try:
+        data = r.json()
+    except Exception:
+        return True, "terkirim"
+
+    if isinstance(data, dict):
+        err = data.get("error")
+        if err:
+            return False, str(err)[:200]
+        st = data.get("status")
+        if isinstance(st, str) and st.lower() in ("error", "false", "fail", "failed"):
+            return False, st[:200]
+    return True, "terkirim"

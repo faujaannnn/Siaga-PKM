@@ -1,0 +1,56 @@
+# Domain: siagabencana.famrc.id
+# Sinkron HTTP awal: bash scripts/sync-nginx.sh
+#
+# HTTPS (Let's Encrypt) — setelah site HTTP jalan:
+#   bash scripts/certbot-siagabencana.sh
+# Certbot akan menambah blok :443 + redirect HTTP→HTTPS pada file ini di
+# /etc/nginx/sites-available/. Jangan timpa file itu dengan sync-nginx.sh mentah
+# dari repo (kecuali Anda merge manual bagian SSL).
+#
+# Upload admin (413): setelah HTTPS, tambahkan juga di blok server { listen 443 … }:
+#   client_max_body_size 200m;
+# (dan proxy_*_timeout di location /api di dalam blok 443 yang sama).
+#
+# 403 pada GET / — biasanya:
+#   • /var/www bukan 755 → www-data tidak bisa masuk ke subfolder (chmod 755 /var/www)
+#   • docroot/file bukan milik/readable www-data → bash scripts/fix-docroot-permissions.sh
+#   • SELinux → chcon -Rt httpd_sys_content_t /var/www/siagabencana
+# Log: sudo tail -40 /var/log/nginx/error.log
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name siagabencana.famrc.id www.siagabencana.famrc.id;
+
+    # Wajib untuk POST /api/admin/upload (PDF/gambar). Tanpa ini nginx default 1m → 413.
+    client_max_body_size 200m;
+
+    root /var/www/siagabencana;
+    index index.html;
+
+    # SPA — jangan pakai blok regex terpisah untuk semua .js (rawan 403 jika permission/urutan location)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Aset Vite (hash) — cache panjang
+    location ^~ /assets/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /api {
+        # Siaga Puskesmas API (uvicorn, default 127.0.0.1:37841) — samakan dengan PM2 / SBP_UVICORN_PORT
+        proxy_pass http://127.0.0.1:37841;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Unggahan besar / koneksi lambat
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        send_timeout 300s;
+    }
+}
